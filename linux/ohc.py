@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 CONFIG = Path.home() / ".config/outer-heaven-compute/config.json"
 MAX_FILE = 50 * 1024 * 1024
 
@@ -148,6 +148,53 @@ def distributed_benchmark(host, token, seconds, remote_workers, local_workers):
     }
 
 
+
+def command_task(host, token, args):
+    if args.task_type == "sort_numbers":
+        try:
+            payload = json.loads(args.input)
+        except json.JSONDecodeError:
+            raise RuntimeError("Para sort_numbers, informe uma lista JSON, exemplo: '[5,2,9,1]'")
+        if not isinstance(payload, list):
+            raise RuntimeError("A entrada de sort_numbers precisa ser uma lista.")
+        if len(payload) > 10000:
+            raise RuntimeError("Limite de 10000 números.")
+    else:
+        payload = args.input
+
+    body = json.dumps({
+        "type": args.task_type,
+        "input": payload,
+    }).encode("utf-8")
+
+    submitted = json.loads(request(
+        host, token, "/task", method="POST", data=body, timeout=30
+    ))
+
+    task_id = submitted["id"]
+    print("Tarefa enviada ao Moto G22.")
+    print("ID:", task_id)
+
+    deadline = time.monotonic() + 60
+
+    while time.monotonic() < deadline:
+        path = "/task?id=" + urllib.parse.quote(task_id, safe="")
+        state = json.loads(request(host, token, path, timeout=15))
+        status = state.get("status")
+
+        if status == "done":
+            print("\nTarefa concluída:")
+            print(json.dumps(state.get("result"), indent=2, ensure_ascii=False))
+            return
+
+        if status == "failed":
+            raise RuntimeError("Falha no celular: " + state.get("error", "erro desconhecido"))
+
+        time.sleep(0.25)
+
+    raise RuntimeError("Tempo limite aguardando a tarefa. ID: " + task_id)
+
+
 def safe_filename(name):
     return bool(
         name
@@ -267,6 +314,10 @@ def main():
         default="distributed",
     )
 
+    task = sub.add_parser("task", help="Executar uma tarefa permitida no celular")
+    task.add_argument("task_type", choices=["sha256", "text_stats", "sort_numbers"])
+    task.add_argument("input", help="Texto ou lista JSON, dependendo da tarefa")
+
     upload = sub.add_parser("upload")
     upload.add_argument("file")
     upload.add_argument("--name")
@@ -326,6 +377,9 @@ def main():
 
         elif args.command == "files":
             command_files(host, token)
+
+        elif args.command == "task":
+            command_task(host, token, args)
 
         elif args.command == "upload":
             command_upload(host, token, args)
