@@ -1,0 +1,16 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'app.outerheaven.compute'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'app.outerheaven.compute'
+        minSdk 26
+        targetSdk 32
+        versionCode 1
+        versionName '1.0'
+    }
+}
